@@ -2,7 +2,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  user_type: 'admin' | 'comum';
+  user_type: 'admin' | 'common';
   created_at: string;
   updated_at: string;
 }

@@ -4,6 +4,7 @@ import { User } from '@/types/database';
 interface UserContextType {
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
+  logout: () => void;
   isAdmin: boolean;
 }
 
@@ -26,22 +27,36 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
 
   // Simulação de usuário logado (em um sistema real seria obtido via login)
   useEffect(() => {
-    // Por enquanto vamos simular com o primeiro usuário admin
-    const mockUser: User = {
-      id: '1',
-      name: 'Admin Sistema',
-      email: 'admin@empresa.com',
-      user_type: 'admin',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    setCurrentUser(mockUser);
+    // Verificar se existe um usuário salvo no localStorage
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+      try {
+        const user = JSON.parse(savedUser) as User;
+        setCurrentUser(user);
+      } catch (error) {
+        console.error('Erro ao recuperar usuário salvo:', error);
+      }
+    }
   }, []);
+
+  const logout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('currentUser');
+  };
+
+  const handleSetCurrentUser = (user: User | null) => {
+    setCurrentUser(user);
+    if (user) {
+      localStorage.setItem('currentUser', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('currentUser');
+    }
+  };
 
   const isAdmin = currentUser?.user_type === 'admin';
 
   return (
-    <UserContext.Provider value={{ currentUser, setCurrentUser, isAdmin }}>
+    <UserContext.Provider value={{ currentUser, setCurrentUser: handleSetCurrentUser, logout, isAdmin }}>
       {children}
     </UserContext.Provider>
   );

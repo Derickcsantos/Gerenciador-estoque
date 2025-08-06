@@ -1,12 +1,7 @@
 import { Dashboard } from "@/components/Dashboard";
-import { UserProvider } from "@/context/UserContext";
 
 const Index = () => {
-  return (
-    <UserProvider>
-      <Dashboard />
-    </UserProvider>
-  );
+  return <Dashboard />;
 };
 
 export default Index;

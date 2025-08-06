@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Bell, Plus, Minus, Users, Package, Settings, Home } from 'lucide-react';
+import { Search, Bell, Plus, Minus, Users, Package, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/context/UserContext';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Product, Notification } from '@/types/database';
 import { toast } from '@/hooks/use-toast';
+import { ProductDialog } from './ProductDialog';
+import { CategoryDialog } from './CategoryDialog';
+import { UserManagementDialog } from './UserManagementDialog';
 
 export const Dashboard: React.FC = () => {
-  const { currentUser, isAdmin } = useUser();
+  const { currentUser, isAdmin, logout } = useUser();
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -18,9 +23,13 @@ export const Dashboard: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
     fetchProducts();
     fetchNotifications();
-  }, []);
+  }, [currentUser, navigate]);
 
   const fetchProducts = async () => {
     try {
@@ -132,7 +141,12 @@ export const Dashboard: React.FC = () => {
     if (isExpiringSoon) {
       return <Badge className="bg-warning text-warning-foreground">Vence em Breve</Badge>;
     }
-    return <Badge className="bg-success text-success-foreground">Ok</Badge>;
+    return <Badge className="bg-success text-success-foreground">OK</Badge>;
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
   };
 
   if (loading) {
@@ -150,7 +164,7 @@ export const Dashboard: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Package className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold text-foreground">Desk Guard</h1>
+            <h1 className="text-2xl font-bold text-foreground">LAQUS Inventory</h1>
           </div>
           
           <div className="flex items-center space-x-4">
@@ -212,11 +226,15 @@ export const Dashboard: React.FC = () => {
                 {currentUser?.name} ({isAdmin ? 'Admin' : 'Usuário'})
               </span>
               {isAdmin && (
-                <Button variant="outline" size="sm">
-                  <Users className="h-4 w-4 mr-2" />
-                  Gerenciar Usuários
-                </Button>
+                <div className="flex space-x-2">
+                  <CategoryDialog onCategoriesUpdated={fetchProducts} />
+                  <UserManagementDialog onUsersUpdated={() => {}} />
+                </div>
               )}
+              <Button variant="ghost" size="sm" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Sair
+              </Button>
             </div>
           </div>
         </div>
@@ -291,10 +309,7 @@ export const Dashboard: React.FC = () => {
             <CardTitle className="flex items-center justify-between">
               <span>Produtos em Estoque</span>
               {isAdmin && (
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Adicionar Produto
-                </Button>
+                <ProductDialog onProductAdded={fetchProducts} />
               )}
             </CardTitle>
           </CardHeader>

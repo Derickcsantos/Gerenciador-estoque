@@ -46,14 +46,13 @@ export default {
 				},
 				success: {
 					DEFAULT: 'hsl(var(--success))',
-					foreground: 'hsl(var(--success-foreground))',
-					muted: 'hsl(var(--success-muted))'
+					foreground: 'hsl(var(--success-foreground))'
 				},
 				warning: {
 					DEFAULT: 'hsl(var(--warning))',
-					foreground: 'hsl(var(--warning-foreground))',
-					muted: 'hsl(var(--warning-muted))'
+					foreground: 'hsl(var(--warning-foreground))'
 				},
+				"primary-dark": "hsl(var(--primary-dark))",
 				popover: {
 					DEFAULT: 'hsl(var(--popover))',
 					foreground: 'hsl(var(--popover-foreground))'
