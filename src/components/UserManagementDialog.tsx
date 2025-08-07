@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Users, Plus, Edit, Trash } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Users, Plus, Edit, Trash, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { User } from '@/types/database';
+import { User, Organization, UserOrganization } from '@/types/database';
 
 interface UserManagementDialogProps {
   onUsersUpdated: () => void;
@@ -16,8 +17,11 @@ interface UserManagementDialogProps {
 export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUsersUpdated }) => {
   const [open, setOpen] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [userOrganizations, setUserOrganizations] = useState<UserOrganization[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [selectedUserOrganizations, setSelectedUserOrganizations] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -27,6 +31,7 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
   useEffect(() => {
     if (open) {
       fetchUsers();
+      fetchOrganizations();
     }
   }, [open]);
 
@@ -39,8 +44,35 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
       
       if (error) throw error;
       setUsers((data || []) as User[]);
+      
+      // Buscar organizações dos usuários
+      if (data && data.length > 0) {
+        const { data: userOrgsData, error: userOrgsError } = await supabase
+          .from('user_organizations')
+          .select(`
+            *,
+            organization:organizations(*)
+          `);
+        
+        if (userOrgsError) throw userOrgsError;
+        setUserOrganizations(userOrgsData || []);
+      }
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
+    }
+  };
+
+  const fetchOrganizations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('organizations')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      if (error) throw error;
+      setOrganizations(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar organizações:', error);
     }
   };
 
@@ -80,10 +112,20 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
           title: "Sucesso",
           description: "Usuário criado com sucesso!"
         });
+        
+        // Se não está editando, adicionar às organizações selecionadas
+        if (!editingUser && data) {
+          await updateUserOrganizations(data[0].id);
+        }
+      }
+
+      if (editingUser) {
+        await updateUserOrganizations(editingUser.id);
       }
 
       setFormData({ name: '', email: '', user_type: 'common' });
       setEditingUser(null);
+      setSelectedUserOrganizations([]);
       fetchUsers();
       onUsersUpdated();
     } catch (error) {
@@ -98,6 +140,36 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
     }
   };
 
+  const updateUserOrganizations = async (userId: string) => {
+    try {
+      // Remover organizações existentes
+      const { error: deleteError } = await supabase
+        .from('user_organizations')
+        .delete()
+        .eq('user_id', userId);
+
+      if (deleteError) throw deleteError;
+
+      // Adicionar novas organizações
+      if (selectedUserOrganizations.length > 0) {
+        const userOrgsToInsert = selectedUserOrganizations.map(orgId => ({
+          user_id: userId,
+          organization_id: orgId,
+          role: formData.user_type
+        }));
+
+        const { error: insertError } = await supabase
+          .from('user_organizations')
+          .insert(userOrgsToInsert);
+
+        if (insertError) throw insertError;
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar organizações do usuário:', error);
+      throw error;
+    }
+  };
+
   const handleEdit = (user: User) => {
     setEditingUser(user);
     setFormData({
@@ -105,6 +177,12 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
       email: user.email,
       user_type: user.user_type
     });
+    
+    // Buscar organizações do usuário
+    const userOrgs = userOrganizations
+      .filter(uo => uo.user_id === user.id)
+      .map(uo => uo.organization_id);
+    setSelectedUserOrganizations(userOrgs);
   };
 
   const handleDelete = async (userId: string) => {
@@ -138,6 +216,19 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
   const resetForm = () => {
     setFormData({ name: '', email: '', user_type: 'common' });
     setEditingUser(null);
+    setSelectedUserOrganizations([]);
+  };
+
+  const getUserOrganizations = (userId: string) => {
+    return userOrganizations.filter(uo => uo.user_id === userId);
+  };
+
+  const handleOrganizationToggle = (orgId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedUserOrganizations(prev => [...prev, orgId]);
+    } else {
+      setSelectedUserOrganizations(prev => prev.filter(id => id !== orgId));
+    }
   };
 
   return (
@@ -196,9 +287,33 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Administrador</SelectItem>
+                  <SelectItem value="editor">Editor</SelectItem>
                   <SelectItem value="common">Usuário Comum</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Organizações
+              </label>
+              <div className="space-y-2 max-h-32 overflow-y-auto border border-input rounded-md p-3">
+                {organizations.map((org) => (
+                  <div key={org.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`org-${org.id}`}
+                      checked={selectedUserOrganizations.includes(org.id)}
+                      onCheckedChange={(checked) => handleOrganizationToggle(org.id, checked as boolean)}
+                    />
+                    <label htmlFor={`org-${org.id}`} className="text-sm font-medium cursor-pointer">
+                      {org.name}
+                    </label>
+                  </div>
+                ))}
+                {organizations.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhuma organização disponível</p>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-end space-x-2">
@@ -222,11 +337,17 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
                       <span className="font-medium">{user.name}</span>
-                      <Badge variant={user.user_type === 'admin' ? 'default' : 'secondary'}>
-                        {user.user_type === 'admin' ? 'Admin' : 'Usuário'}
+                      <Badge variant={user.user_type === 'admin' ? 'default' : user.user_type === 'editor' ? 'secondary' : 'outline'}>
+                        {user.user_type === 'admin' ? 'Admin' : user.user_type === 'editor' ? 'Editor' : 'Comum'}
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{user.email}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Building2 className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">
+                        {getUserOrganizations(user.id).length} organização{getUserOrganizations(user.id).length !== 1 ? 'ões' : ''}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex space-x-1">
                     <Button

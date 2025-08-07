@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Bell, Plus, Minus, Users, Package, LogOut } from 'lucide-react';
+import { Search, Bell, Plus, Minus, Users, Package, LogOut, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -13,7 +13,8 @@ import { ProductDialog } from './ProductDialog';
 import { CategoryDialog } from './CategoryDialog';
 import { UserManagementDialog } from './UserManagementDialog';
 import { ModelDialog } from './ModelDialog';
-import { OrganizationSelect } from './OrganizationSelect';
+import { AppSidebar } from './AppSidebar';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
 export const Dashboard: React.FC = () => {
   const { currentUser, isAdmin, logout } = useUser();
@@ -23,17 +24,22 @@ export const Dashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [currentOrganization, setCurrentOrganization] = useState('');
 
   useEffect(() => {
     if (!currentUser) {
       navigate('/login');
       return;
     }
-    fetchProducts();
-    fetchNotifications();
-  }, [currentUser, navigate]);
+    if (currentOrganization) {
+      fetchProducts();
+      fetchNotifications();
+    }
+  }, [currentUser, navigate, currentOrganization]);
 
   const fetchProducts = async () => {
+    if (!currentOrganization) return;
+    
     try {
       const { data, error } = await supabase
         .from('products')
@@ -42,6 +48,7 @@ export const Dashboard: React.FC = () => {
           model:models(*, category:categories(*)),
           category:categories(*)
         `)
+        .eq('organization_id', currentOrganization)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -160,17 +167,25 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Package className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold text-foreground">LAQUS Inventory</h1>
-          </div>
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-background">
+        <AppSidebar 
+          currentOrganization={currentOrganization} 
+          onOrganizationChange={setCurrentOrganization} 
+        />
+        
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <header className="bg-card border-b border-border px-6 py-4 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <SidebarTrigger />
+                <Package className="h-8 w-8 text-primary" />
+                <h1 className="text-2xl font-bold text-foreground">LAQUS Inventory</h1>
+              </div>
           
-          <div className="flex items-center space-x-4">
-            <div className="relative">
+              <div className="flex items-center space-x-4">
+                <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar produtos..."
@@ -178,9 +193,9 @@ export const Dashboard: React.FC = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 w-80"
               />
-            </div>
+                </div>
             
-            <div className="relative">
+                <div className="relative">
               <Button 
                 variant="ghost" 
                 size="icon"
@@ -221,174 +236,177 @@ export const Dashboard: React.FC = () => {
                   </div>
                 </div>
               )}
-            </div>
+                </div>
             
-            <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2">
               <span className="text-sm text-muted-foreground">
                 {currentUser?.name} ({isAdmin ? 'Admin' : 'Usuário'})
               </span>
               {isAdmin && (
                 <div className="flex space-x-2">
                   <CategoryDialog onCategoriesUpdated={fetchProducts} />
+                  <ModelDialog onModelsUpdated={fetchProducts} />
                   <UserManagementDialog onUsersUpdated={() => {}} />
                 </div>
               )}
               <Button variant="ghost" size="sm" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Sair
-              </Button>
+                 </Button>
+                 </div>
+               </div>
             </div>
-          </div>
-        </div>
-      </header>
+          </header>
 
-      {/* Main Content */}
-      <main className="p-6">
-        <div className="mb-6">
-          <h2 className="text-3xl font-bold text-foreground mb-2">Dashboard de Estoque</h2>
-          <p className="text-muted-foreground">
-            Gerencie o estoque de equipamentos e licenças da empresa
-          </p>
-        </div>
+          {/* Main Content */}
+          <main className="p-6 flex-1 overflow-auto">
+            <div className="mb-6">
+              <h2 className="text-3xl font-bold text-foreground mb-2">Dashboard de Estoque</h2>
+              <p className="text-muted-foreground">
+                Gerencie o estoque de equipamentos e licenças da empresa
+              </p>
+            </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total de Produtos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">{products.length}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Estoque Baixo
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">
-                {products.filter(p => p.quantity <= p.min_quantity).length}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Vencendo em Breve
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-warning">
-                {products.filter(p => 
-                  p.expiry_date && 
-                  new Date(p.expiry_date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-                ).length}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Notificações
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">{notifications.length}</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Products Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Produtos em Estoque</span>
-              {isAdmin && (
-                <ProductDialog onProductAdded={fetchProducts} />
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Produto</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Modelo</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Categoria</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Quantidade</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Vencimento</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
-                    {isAdmin && (
-                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Ações</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredProducts.map((product) => (
-                    <tr key={product.id} className="border-b border-border hover:bg-muted/50">
-                      <td className="py-3 px-4 font-medium text-foreground">{product.name}</td>
-                      <td className="py-3 px-4 text-muted-foreground">
-                        {product.model?.brand} {product.model?.name}
-                      </td>
-                      <td className="py-3 px-4 text-muted-foreground">
-                        {product.category?.name}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-medium text-foreground">{product.quantity}</span>
-                        <span className="text-muted-foreground text-sm"> / min: {product.min_quantity}</span>
-                      </td>
-                      <td className="py-3 px-4 text-muted-foreground">
-                        {product.expiry_date 
-                          ? new Date(product.expiry_date).toLocaleDateString('pt-BR')
-                          : 'N/A'
-                        }
-                      </td>
-                      <td className="py-3 px-4">
-                        {getStatusBadge(product)}
-                      </td>
-                      {isAdmin && (
-                        <td className="py-3 px-4">
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => updateQuantity(product.id, product.quantity - 1)}
-                              disabled={product.quantity <= 0}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => updateQuantity(product.id, product.quantity + 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Total de Produtos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-foreground">{products.length}</div>
+                </CardContent>
+              </Card>
               
-              {filteredProducts.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  Nenhum produto encontrado
-                </div>
-              )}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Estoque Baixo
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-destructive">
+                    {products.filter(p => p.quantity <= p.min_quantity).length}
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Vencendo em Breve
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-warning">
+                    {products.filter(p => 
+                      p.expiry_date && 
+                      new Date(p.expiry_date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                    ).length}
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Notificações
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-primary">{notifications.length}</div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+
+            {/* Products Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Produtos em Estoque</span>
+                  {isAdmin && (
+                    <ProductDialog onProductAdded={fetchProducts} currentOrganization={currentOrganization} />
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Produto</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Modelo</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Categoria</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Quantidade</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Vencimento</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
+                        {isAdmin && (
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Ações</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProducts.map((product) => (
+                        <tr key={product.id} className="border-b border-border hover:bg-muted/50">
+                          <td className="py-3 px-4 font-medium text-foreground">{product.name}</td>
+                          <td className="py-3 px-4 text-muted-foreground">
+                            {product.model?.brand} {product.model?.name}
+                          </td>
+                          <td className="py-3 px-4 text-muted-foreground">
+                            {product.category?.name}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-medium text-foreground">{product.quantity}</span>
+                            <span className="text-muted-foreground text-sm"> / min: {product.min_quantity}</span>
+                          </td>
+                          <td className="py-3 px-4 text-muted-foreground">
+                            {product.expiry_date 
+                              ? new Date(product.expiry_date).toLocaleDateString('pt-BR')
+                              : 'N/A'
+                            }
+                          </td>
+                          <td className="py-3 px-4">
+                            {getStatusBadge(product)}
+                          </td>
+                          {isAdmin && (
+                            <td className="py-3 px-4">
+                              <div className="flex items-center space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => updateQuantity(product.id, product.quantity - 1)}
+                                  disabled={product.quantity <= 0}
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => updateQuantity(product.id, product.quantity + 1)}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  
+                  {filteredProducts.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Nenhum produto encontrado
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 };

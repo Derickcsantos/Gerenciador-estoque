@@ -14,9 +14,10 @@ import { Category, Model } from '@/types/database';
 
 interface ProductDialogProps {
   onProductAdded: () => void;
+  currentOrganization: string;
 }
 
-export const ProductDialog: React.FC<ProductDialogProps> = ({ onProductAdded }) => {
+export const ProductDialog: React.FC<ProductDialogProps> = ({ onProductAdded, currentOrganization }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -29,6 +30,7 @@ export const ProductDialog: React.FC<ProductDialogProps> = ({ onProductAdded }) 
     modelId: '',
     quantity: 1,
     minQuantity: 1,
+    value: '',
     expiryDate: undefined as Date | undefined
   });
 
@@ -53,6 +55,7 @@ export const ProductDialog: React.FC<ProductDialogProps> = ({ onProductAdded }) 
       const { data, error } = await supabase
         .from('categories')
         .select('*')
+        .eq('organization_id', currentOrganization)
         .order('name');
       
       if (error) throw error;
@@ -67,6 +70,7 @@ export const ProductDialog: React.FC<ProductDialogProps> = ({ onProductAdded }) 
       const { data, error } = await supabase
         .from('models')
         .select('*')
+        .eq('organization_id', currentOrganization)
         .order('name');
       
       if (error) throw error;
@@ -87,8 +91,10 @@ export const ProductDialog: React.FC<ProductDialogProps> = ({ onProductAdded }) 
           name: formData.name,
           category_id: formData.categoryId,
           model_id: formData.modelId,
+          organization_id: currentOrganization,
           quantity: formData.quantity,
           min_quantity: formData.minQuantity,
+          value: formData.value ? parseFloat(formData.value) : null,
           expiry_date: formData.expiryDate?.toISOString().split('T')[0] || null
         });
 
@@ -105,6 +111,7 @@ export const ProductDialog: React.FC<ProductDialogProps> = ({ onProductAdded }) 
         modelId: '',
         quantity: 1,
         minQuantity: 1,
+        value: '',
         expiryDate: undefined
       });
       
@@ -219,6 +226,21 @@ export const ProductDialog: React.FC<ProductDialogProps> = ({ onProductAdded }) 
                 required
               />
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="value" className="block text-sm font-medium mb-2">
+              Valor (opcional)
+            </label>
+            <Input
+              id="value"
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.value}
+              onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+              placeholder="0.00"
+            />
           </div>
 
           <div>
