@@ -12,6 +12,8 @@ import { toast } from '@/hooks/use-toast';
 import { ProductDialog } from './ProductDialog';
 import { CategoryDialog } from './CategoryDialog';
 import { UserManagementDialog } from './UserManagementDialog';
+import { ModelDialog } from './ModelDialog';
+import { OrganizationSelect } from './OrganizationSelect';
 
 export const Dashboard: React.FC = () => {
   const { currentUser, isAdmin, logout } = useUser();
