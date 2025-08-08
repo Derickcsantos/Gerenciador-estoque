@@ -35,11 +35,16 @@ export const Dashboard: React.FC = () => {
       navigate('/login');
       return;
     }
-    if (currentOrganization) {
-      fetchProducts();
-      fetchNotifications();
-      fetchModels();
+    
+    // Se não tem organização ainda, aguardar o AppSidebar definir uma
+    if (!currentOrganization) {
+      setLoading(false); // Para não ficar carregando eternamente
+      return;
     }
+    
+    fetchProducts();
+    fetchNotifications();
+    fetchModels();
   }, [currentUser, navigate, currentOrganization]);
 
   const fetchProducts = async () => {
