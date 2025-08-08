@@ -55,7 +55,6 @@ export const ProductDialog: React.FC<ProductDialogProps> = ({ onProductAdded, cu
       const { data, error } = await supabase
         .from('categories')
         .select('*')
-        .eq('organization_id', currentOrganization)
         .order('name');
       
       if (error) throw error;
@@ -70,7 +69,6 @@ export const ProductDialog: React.FC<ProductDialogProps> = ({ onProductAdded, cu
       const { data, error } = await supabase
         .from('models')
         .select('*')
-        .eq('organization_id', currentOrganization)
         .order('name');
       
       if (error) throw error;
@@ -91,7 +89,6 @@ export const ProductDialog: React.FC<ProductDialogProps> = ({ onProductAdded, cu
           name: formData.name,
           category_id: formData.categoryId,
           model_id: formData.modelId,
-          organization_id: currentOrganization,
           quantity: formData.quantity,
           min_quantity: formData.minQuantity,
           value: formData.value ? parseFloat(formData.value) : null,

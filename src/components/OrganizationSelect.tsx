@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Plus, Building } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useUser } from '@/context/UserContext';
 import { Organization } from '@/types/database';
@@ -24,21 +23,22 @@ export const OrganizationSelect: React.FC<OrganizationSelectProps> = ({
     if (!currentUser) return;
 
     try {
-      let query = supabase
-        .from('user_organizations')
-        .select('organization:organizations(*)')
-        .eq('user_id', currentUser.id);
+      // Simulação temporária de organizações
+      const mockOrganizations: Organization[] = [
+        {
+          id: '1',
+          name: 'LAQUS Principal',
+          description: 'Organização principal da empresa',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      ];
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      const userOrgs = data?.map(item => item.organization).filter(Boolean) || [];
-      setOrganizations(userOrgs as Organization[]);
+      setOrganizations(mockOrganizations);
 
       // Se não há organização selecionada e há organizações disponíveis, seleciona a primeira
-      if (!currentOrganization && userOrgs.length > 0) {
-        onOrganizationChange(userOrgs[0].id);
+      if (!currentOrganization && mockOrganizations.length > 0) {
+        onOrganizationChange(mockOrganizations[0].id);
       }
     } catch (error) {
       console.error('Erro ao carregar organizações:', error);

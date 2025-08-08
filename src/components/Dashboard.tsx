@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Bell, Plus, Minus, Users, Package, LogOut, Menu } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, Bell, Plus, Minus, Users, Package, LogOut, Menu, Download, BarChart3 } from 'lucide-react';
+import { useReactToPrint } from 'react-to-print';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -7,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/context/UserContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Product, Notification } from '@/types/database';
+import { Product, Notification, Model, ModelWithProductCount } from '@/types/database';
 import { toast } from '@/hooks/use-toast';
 import { ProductDialog } from './ProductDialog';
 import { CategoryDialog } from './CategoryDialog';
@@ -21,10 +22,13 @@ export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [models, setModels] = useState<ModelWithProductCount[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showModelsView, setShowModelsView] = useState(false);
   const [currentOrganization, setCurrentOrganization] = useState('');
+  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!currentUser) {
@@ -34,6 +38,7 @@ export const Dashboard: React.FC = () => {
     if (currentOrganization) {
       fetchProducts();
       fetchNotifications();
+      fetchModels();
     }
   }, [currentUser, navigate, currentOrganization]);
 
@@ -48,7 +53,6 @@ export const Dashboard: React.FC = () => {
           model:models(*, category:categories(*)),
           category:categories(*)
         `)
-        .eq('organization_id', currentOrganization)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -62,6 +66,46 @@ export const Dashboard: React.FC = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchModels = async () => {
+    if (!currentOrganization) return;
+    
+    try {
+      const { data: modelsData, error: modelsError } = await supabase
+        .from('models')
+        .select(`
+          *,
+          category:categories(*)
+        `)
+        .order('name', { ascending: true });
+
+      if (modelsError) throw modelsError;
+
+      // Buscar contagem de produtos para cada modelo
+      const modelsWithCount: ModelWithProductCount[] = await Promise.all(
+        (modelsData || []).map(async (model) => {
+          const { count } = await supabase
+            .from('products')
+            .select('*', { count: 'exact', head: true })
+            .eq('model_id', model.id);
+
+          return {
+            ...model,
+            product_count: count || 0
+          };
+        })
+      );
+
+      setModels(modelsWithCount);
+    } catch (error) {
+      console.error('Erro ao buscar modelos:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os modelos",
+        variant: "destructive"
+      });
     }
   };
 
@@ -106,8 +150,9 @@ export const Dashboard: React.FC = () => {
         description: "Quantidade atualizada com sucesso",
       });
 
-      // Recarregar notificações
+      // Recarregar notificações e modelos
       fetchNotifications();
+      fetchModels();
     } catch (error) {
       console.error('Erro ao atualizar quantidade:', error);
       toast({
@@ -158,6 +203,11 @@ export const Dashboard: React.FC = () => {
     navigate('/');
   };
 
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `Estoque_LAQUS_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}`,
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -184,8 +234,8 @@ export const Dashboard: React.FC = () => {
                 <h1 className="text-2xl font-bold text-foreground">LAQUS Inventory</h1>
               </div>
           
-              <div className="flex items-center space-x-4">
-                <div className="relative">
+                <div className="flex items-center space-x-4">
+                  <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar produtos..."
@@ -193,7 +243,27 @@ export const Dashboard: React.FC = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 w-80"
               />
-                </div>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowModelsView(!showModelsView)}
+                    className="hidden md:flex items-center gap-2"
+                  >
+                    <BarChart3 className="h-4 w-4" />
+                    {showModelsView ? 'Produtos' : 'Modelos'}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePrint}
+                    className="hidden md:flex items-center gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    PDF
+                  </Button>
             
                 <div className="relative">
               <Button 
@@ -260,6 +330,7 @@ export const Dashboard: React.FC = () => {
 
           {/* Main Content */}
           <main className="p-6 flex-1 overflow-auto">
+            <div ref={printRef}>
             <div className="mb-6">
               <h2 className="text-3xl font-bold text-foreground mb-2">Dashboard de Estoque</h2>
               <p className="text-muted-foreground">
@@ -321,89 +392,138 @@ export const Dashboard: React.FC = () => {
               </Card>
             </div>
 
-            {/* Products Table */}
+            {/* Products/Models Table */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  <span>Produtos em Estoque</span>
-                  {isAdmin && (
-                    <ProductDialog onProductAdded={fetchProducts} currentOrganization={currentOrganization} />
-                  )}
+                  <span>{showModelsView ? 'Modelos e Quantidades' : 'Produtos em Estoque'}</span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowModelsView(!showModelsView)}
+                      className="md:hidden"
+                    >
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      {showModelsView ? 'Produtos' : 'Modelos'}
+                    </Button>
+                    {isAdmin && !showModelsView && (
+                      <ProductDialog onProductAdded={fetchProducts} currentOrganization={currentOrganization} />
+                    )}
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Produto</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Modelo</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Categoria</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Quantidade</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Vencimento</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
-                        {isAdmin && (
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Ações</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredProducts.map((product) => (
-                        <tr key={product.id} className="border-b border-border hover:bg-muted/50">
-                          <td className="py-3 px-4 font-medium text-foreground">{product.name}</td>
-                          <td className="py-3 px-4 text-muted-foreground">
-                            {product.model?.brand} {product.model?.name}
-                          </td>
-                          <td className="py-3 px-4 text-muted-foreground">
-                            {product.category?.name}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="font-medium text-foreground">{product.quantity}</span>
-                            <span className="text-muted-foreground text-sm"> / min: {product.min_quantity}</span>
-                          </td>
-                          <td className="py-3 px-4 text-muted-foreground">
-                            {product.expiry_date 
-                              ? new Date(product.expiry_date).toLocaleDateString('pt-BR')
-                              : 'N/A'
-                            }
-                          </td>
-                          <td className="py-3 px-4">
-                            {getStatusBadge(product)}
-                          </td>
-                          {isAdmin && (
-                            <td className="py-3 px-4">
-                              <div className="flex items-center space-x-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => updateQuantity(product.id, product.quantity - 1)}
-                                  disabled={product.quantity <= 0}
-                                >
-                                  <Minus className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => updateQuantity(product.id, product.quantity + 1)}
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                              </div>
+                  {showModelsView ? (
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Modelo</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Marca</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Categoria</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Total de Produtos</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {models.map((model) => (
+                          <tr key={model.id} className="border-b border-border hover:bg-muted/50">
+                            <td className="py-3 px-4 font-medium text-foreground">{model.name}</td>
+                            <td className="py-3 px-4 text-muted-foreground">{model.brand}</td>
+                            <td className="py-3 px-4 text-muted-foreground">
+                              {model.category?.name}
                             </td>
+                            <td className="py-3 px-4">
+                              <Badge variant={model.product_count > 0 ? "default" : "secondary"}>
+                                {model.product_count} {model.product_count === 1 ? 'produto' : 'produtos'}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Produto</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Modelo</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Categoria</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Quantidade</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Vencimento</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
+                          {isAdmin && (
+                            <th className="text-left py-3 px-4 font-medium text-muted-foreground">Ações</th>
                           )}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {filteredProducts.map((product) => (
+                          <tr key={product.id} className="border-b border-border hover:bg-muted/50">
+                            <td className="py-3 px-4 font-medium text-foreground">{product.name}</td>
+                            <td className="py-3 px-4 text-muted-foreground">
+                              {product.model?.brand} {product.model?.name}
+                            </td>
+                            <td className="py-3 px-4 text-muted-foreground">
+                              {product.category?.name}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="font-medium text-foreground">{product.quantity}</span>
+                              <span className="text-muted-foreground text-sm"> / min: {product.min_quantity}</span>
+                            </td>
+                            <td className="py-3 px-4 text-muted-foreground">
+                              {product.expiry_date 
+                                ? new Date(product.expiry_date).toLocaleDateString('pt-BR')
+                                : 'N/A'
+                              }
+                            </td>
+                            <td className="py-3 px-4">
+                              {getStatusBadge(product)}
+                            </td>
+                            {isAdmin && (
+                              <td className="py-3 px-4">
+                                <div className="flex items-center space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => updateQuantity(product.id, product.quantity - 1)}
+                                    disabled={product.quantity <= 0}
+                                  >
+                                    <Minus className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => updateQuantity(product.id, product.quantity + 1)}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                   
-                  {filteredProducts.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      Nenhum produto encontrado
-                    </div>
+                  {showModelsView ? (
+                    models.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        Nenhum modelo encontrado
+                      </div>
+                    )
+                  ) : (
+                    filteredProducts.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        Nenhum produto encontrado
+                      </div>
+                    )
                   )}
                 </div>
               </CardContent>
             </Card>
+            </div>
           </main>
         </div>
       </div>

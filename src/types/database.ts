@@ -29,7 +29,7 @@ export interface Category {
   id: string;
   name: string;
   description?: string;
-  organization_id: string;
+  organization_id?: string;
   created_at: string;
   updated_at: string;
   organization?: Organization;
@@ -40,7 +40,7 @@ export interface Model {
   name: string;
   brand: string;
   category_id: string;
-  organization_id: string;
+  organization_id?: string;
   created_at: string;
   updated_at: string;
   category?: Category;
@@ -52,7 +52,7 @@ export interface Product {
   name: string;
   model_id: string;
   category_id: string;
-  organization_id: string;
+  organization_id?: string;
   quantity: number;
   min_quantity: number;
   value?: number;
@@ -62,6 +62,10 @@ export interface Product {
   model?: Model;
   category?: Category;
   organization?: Organization;
+}
+
+export interface ModelWithProductCount extends Model {
+  product_count: number;
 }
 
 export interface Notification {

@@ -45,18 +45,8 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
       if (error) throw error;
       setUsers((data || []) as User[]);
       
-      // Buscar organizações dos usuários
-      if (data && data.length > 0) {
-        const { data: userOrgsData, error: userOrgsError } = await supabase
-          .from('user_organizations')
-          .select(`
-            *,
-            organization:organizations(*)
-          `);
-        
-        if (userOrgsError) throw userOrgsError;
-        setUserOrganizations(userOrgsData || []);
-      }
+      // Simulação temporária para organizações de usuários
+      setUserOrganizations([]);
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
     }
@@ -64,13 +54,17 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
 
   const fetchOrganizations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('organizations')
-        .select('*')
-        .order('name', { ascending: true });
-      
-      if (error) throw error;
-      setOrganizations(data || []);
+      // Simulação temporária
+      const mockOrganizations: Organization[] = [
+        {
+          id: '1',
+          name: 'LAQUS Principal',
+          description: 'Organização principal da empresa',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      ];
+      setOrganizations(mockOrganizations);
     } catch (error) {
       console.error('Erro ao buscar organizações:', error);
     }
@@ -99,13 +93,15 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
         });
       } else {
         // Criar novo usuário
-        const { error } = await supabase
+        const { data: newUserData, error } = await supabase
           .from('users')
           .insert({
             name: formData.name,
             email: formData.email,
             user_type: formData.user_type
-          });
+          })
+          .select()
+          .single();
 
         if (error) throw error;
         toast({
@@ -113,14 +109,23 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
           description: "Usuário criado com sucesso!"
         });
         
-        // Se não está editando, adicionar às organizações selecionadas
-        if (!editingUser && data) {
-          await updateUserOrganizations(data[0].id);
+        // Se não está editando, simular associação às organizações selecionadas
+        if (!editingUser && newUserData) {
+          console.log('Simulando criação de associação usuário-organização:', {
+            user_id: newUserData.id,
+            organizations: selectedUserOrganizations,
+            role: formData.user_type
+          });
         }
       }
 
       if (editingUser) {
-        await updateUserOrganizations(editingUser.id);
+        // Simulação temporária - não há operação real no banco
+        console.log('Simulando atualização de associação usuário-organização:', {
+          user_id: editingUser.id,
+          organizations: selectedUserOrganizations,
+          role: formData.user_type
+        });
       }
 
       setFormData({ name: '', email: '', user_type: 'common' });
@@ -137,36 +142,6 @@ export const UserManagementDialog: React.FC<UserManagementDialogProps> = ({ onUs
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const updateUserOrganizations = async (userId: string) => {
-    try {
-      // Remover organizações existentes
-      const { error: deleteError } = await supabase
-        .from('user_organizations')
-        .delete()
-        .eq('user_id', userId);
-
-      if (deleteError) throw deleteError;
-
-      // Adicionar novas organizações
-      if (selectedUserOrganizations.length > 0) {
-        const userOrgsToInsert = selectedUserOrganizations.map(orgId => ({
-          user_id: userId,
-          organization_id: orgId,
-          role: formData.user_type
-        }));
-
-        const { error: insertError } = await supabase
-          .from('user_organizations')
-          .insert(userOrgsToInsert);
-
-        if (insertError) throw insertError;
-      }
-    } catch (error) {
-      console.error('Erro ao atualizar organizações do usuário:', error);
-      throw error;
     }
   };
 

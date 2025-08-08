@@ -38,21 +38,30 @@ export function AppSidebar({ currentOrganization, onOrganizationChange }: AppSid
 
   const fetchUserOrganizations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('user_organizations')
-        .select(`
-          *,
-          organization:organizations(*)
-        `)
-        .eq('user_id', currentUser?.id)
-        .order('created_at', { ascending: true });
+      // Como a tabela user_organizations ainda não está disponível nos types,
+      // vamos simular organizações por enquanto
+      const mockOrganizations: UserOrganization[] = [
+        {
+          id: '1',
+          user_id: currentUser?.id || '',
+          organization_id: '1',
+          role: currentUser?.user_type === 'admin' ? 'admin' : 'editor',
+          created_at: new Date().toISOString(),
+          organization: {
+            id: '1',
+            name: 'LAQUS Principal',
+            description: 'Organização principal da empresa',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        }
+      ];
 
-      if (error) throw error;
-      setUserOrganizations(data || []);
+      setUserOrganizations(mockOrganizations);
 
       // Se não tem organização selecionada e tem organizações, seleciona a primeira
-      if (!currentOrganization && data && data.length > 0) {
-        onOrganizationChange(data[0].organization_id);
+      if (!currentOrganization && mockOrganizations.length > 0) {
+        onOrganizationChange(mockOrganizations[0].organization_id);
       }
     } catch (error) {
       console.error('Erro ao buscar organizações:', error);

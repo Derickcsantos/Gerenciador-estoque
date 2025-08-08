@@ -31,8 +31,11 @@ export const ModelDialog: React.FC<ModelDialogProps> = ({ onModelsUpdated }) => 
     try {
       const { data, error } = await supabase
         .from('models')
-        .select('*, category:categories(*)')
-        .eq('organization_id', currentUser?.organization_id);
+        .select(`
+          *,
+          category:categories(*)
+        `)
+        .order('name', { ascending: true });
 
       if (error) throw error;
       setModels(data || []);
@@ -51,7 +54,7 @@ export const ModelDialog: React.FC<ModelDialogProps> = ({ onModelsUpdated }) => 
       const { data, error } = await supabase
         .from('categories')
         .select('*')
-        .eq('organization_id', currentUser?.organization_id);
+        .order('name', { ascending: true });
 
       if (error) throw error;
       setCategories(data || []);
@@ -94,8 +97,7 @@ export const ModelDialog: React.FC<ModelDialogProps> = ({ onModelsUpdated }) => 
           .insert({
             name: formData.name,
             brand: formData.brand,
-            category_id: formData.category_id,
-            organization_id: currentUser?.organization_id
+            category_id: formData.category_id
           });
 
         if (error) throw error;
