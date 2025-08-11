@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Bell, Plus, Minus, Users, Package, LogOut, Menu, Download, BarChart3 } from 'lucide-react';
+import { Search, Bell, Plus, Minus, Users, Package, LogOut, Menu, Download, BarChart3, Trash } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,11 +14,13 @@ import { ProductDialog } from './ProductDialog';
 import { CategoryDialog } from './CategoryDialog';
 import { UserManagementDialog } from './UserManagementDialog';
 import { ModelDialog } from './ModelDialog';
+import { OrganizationManagementDialog } from './OrganizationManagementDialog';
 import { AppSidebar } from './AppSidebar';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
 export const Dashboard: React.FC = () => {
   const { currentUser, isAdmin, logout } = useUser();
+  const isEditor = currentUser?.user_type === 'editor';
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -136,6 +138,16 @@ export const Dashboard: React.FC = () => {
   const updateQuantity = async (productId: string, newQuantity: number) => {
     if (newQuantity < 0) return;
 
+    // Verificar permissões - apenas admins e editores podem alterar quantidades
+    if (!isAdmin && !isEditor) {
+      toast({
+        title: "Sem permissão",
+        description: "Apenas administradores e editores podem alterar quantidades",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('products')
@@ -163,6 +175,46 @@ export const Dashboard: React.FC = () => {
       toast({
         title: "Erro",
         description: "Não foi possível atualizar a quantidade",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const deleteProduct = async (productId: string) => {
+    // Verificar permissões - apenas admins e editores podem excluir
+    if (!isAdmin && !isEditor) {
+      toast({
+        title: "Sem permissão",
+        description: "Apenas administradores e editores podem excluir produtos",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!confirm('Tem certeza que deseja excluir este produto?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', productId);
+
+      if (error) throw error;
+
+      setProducts(products.filter(p => p.id !== productId));
+      toast({
+        title: "Sucesso",
+        description: "Produto excluído com sucesso",
+      });
+
+      // Recarregar notificações e modelos
+      fetchNotifications();
+      fetchModels();
+    } catch (error) {
+      console.error('Erro ao excluir produto:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir o produto",
         variant: "destructive"
       });
     }
@@ -240,13 +292,13 @@ export const Dashboard: React.FC = () => {
               </div>
           
                 <div className="flex items-center space-x-4">
-                  <div className="relative">
+                  <div className="relative hidden sm:block">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar produtos..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-80"
+                className="pl-10 w-40 lg:w-80"
               />
                   </div>
 
@@ -314,19 +366,24 @@ export const Dashboard: React.FC = () => {
                 </div>
             
                 <div className="flex items-center space-x-2">
-              <span className="text-sm text-muted-foreground">
-                {currentUser?.name} ({isAdmin ? 'Admin' : 'Usuário'})
+              <span className="text-sm text-muted-foreground hidden md:block">
+                {currentUser?.name} ({isAdmin ? 'Admin' : isEditor ? 'Editor' : 'Usuário'})
               </span>
               {isAdmin && (
-                <div className="flex space-x-2">
+                <div className="hidden lg:flex space-x-2">
                   <CategoryDialog onCategoriesUpdated={fetchProducts} />
                   <ModelDialog onModelsUpdated={fetchProducts} />
                   <UserManagementDialog onUsersUpdated={() => {}} />
+                  <OrganizationManagementDialog 
+                    onOrganizationsUpdated={() => {}} 
+                    currentOrganization={currentOrganization}
+                    onOrganizationChange={setCurrentOrganization}
+                  />
                 </div>
               )}
               <Button variant="ghost" size="sm" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
-                Sair
+                <span className="hidden sm:inline">Sair</span>
                  </Button>
                  </div>
                </div>
@@ -423,91 +480,121 @@ export const Dashboard: React.FC = () => {
                   {showModelsView ? (
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b border-border">
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Modelo</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Marca</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Categoria</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Total de Produtos</th>
-                        </tr>
+                         <tr className="border-b border-border">
+                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Modelo</th>
+                           <th className="text-left py-3 px-4 font-medium text-muted-foreground hidden sm:table-cell">Marca</th>
+                           <th className="text-left py-3 px-4 font-medium text-muted-foreground hidden md:table-cell">Categoria</th>
+                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Produtos</th>
+                         </tr>
                       </thead>
                       <tbody>
-                        {models.map((model) => (
-                          <tr key={model.id} className="border-b border-border hover:bg-muted/50">
-                            <td className="py-3 px-4 font-medium text-foreground">{model.name}</td>
-                            <td className="py-3 px-4 text-muted-foreground">{model.brand}</td>
-                            <td className="py-3 px-4 text-muted-foreground">
-                              {model.category?.name}
-                            </td>
-                            <td className="py-3 px-4">
-                              <Badge variant={model.product_count > 0 ? "default" : "secondary"}>
-                                {model.product_count} {model.product_count === 1 ? 'produto' : 'produtos'}
-                              </Badge>
-                            </td>
-                          </tr>
-                        ))}
+                         {models.map((model) => (
+                           <tr key={model.id} className="border-b border-border hover:bg-muted/50">
+                             <td className="py-3 px-4 font-medium text-foreground">
+                               <div>
+                                 <div>{model.name}</div>
+                                 <div className="text-xs text-muted-foreground sm:hidden">
+                                   {model.brand}
+                                 </div>
+                               </div>
+                             </td>
+                             <td className="py-3 px-4 text-muted-foreground hidden sm:table-cell">{model.brand}</td>
+                             <td className="py-3 px-4 text-muted-foreground hidden md:table-cell">
+                               {model.category?.name}
+                             </td>
+                             <td className="py-3 px-4">
+                               <Badge variant={model.product_count > 0 ? "default" : "secondary"} className="text-xs">
+                                 {model.product_count}
+                               </Badge>
+                             </td>
+                           </tr>
+                         ))}
                       </tbody>
                     </table>
                   ) : (
                     <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-border">
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Produto</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Modelo</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Categoria</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Quantidade</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Vencimento</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
-                          {isAdmin && (
-                            <th className="text-left py-3 px-4 font-medium text-muted-foreground">Ações</th>
-                          )}
-                        </tr>
-                      </thead>
+                       <thead>
+                         <tr className="border-b border-border">
+                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Produto</th>
+                           <th className="text-left py-3 px-4 font-medium text-muted-foreground hidden sm:table-cell">Modelo</th>
+                           <th className="text-left py-3 px-4 font-medium text-muted-foreground hidden md:table-cell">Categoria</th>
+                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Qtd</th>
+                           <th className="text-left py-3 px-4 font-medium text-muted-foreground hidden lg:table-cell">Vencimento</th>
+                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
+                           {(isAdmin || isEditor) && (
+                             <th className="text-left py-3 px-4 font-medium text-muted-foreground">Ações</th>
+                           )}
+                         </tr>
+                       </thead>
                       <tbody>
-                        {filteredProducts.map((product) => (
-                          <tr key={product.id} className="border-b border-border hover:bg-muted/50">
-                            <td className="py-3 px-4 font-medium text-foreground">{product.name}</td>
-                            <td className="py-3 px-4 text-muted-foreground">
-                              {product.model?.brand} {product.model?.name}
-                            </td>
-                            <td className="py-3 px-4 text-muted-foreground">
-                              {product.category?.name}
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className="font-medium text-foreground">{product.quantity}</span>
-                              <span className="text-muted-foreground text-sm"> / min: {product.min_quantity}</span>
-                            </td>
-                            <td className="py-3 px-4 text-muted-foreground">
-                              {product.expiry_date 
-                                ? new Date(product.expiry_date).toLocaleDateString('pt-BR')
-                                : 'N/A'
-                              }
-                            </td>
-                            <td className="py-3 px-4">
-                              {getStatusBadge(product)}
-                            </td>
-                            {isAdmin && (
-                              <td className="py-3 px-4">
-                                <div className="flex items-center space-x-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => updateQuantity(product.id, product.quantity - 1)}
-                                    disabled={product.quantity <= 0}
-                                  >
-                                    <Minus className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => updateQuantity(product.id, product.quantity + 1)}
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        ))}
+                         {filteredProducts.map((product) => (
+                           <tr key={product.id} className="border-b border-border hover:bg-muted/50">
+                             <td className="py-3 px-4 font-medium text-foreground">
+                               <div>
+                                 <div>{product.name}</div>
+                                 <div className="text-xs text-muted-foreground sm:hidden">
+                                   {product.model?.brand} {product.model?.name}
+                                 </div>
+                               </div>
+                             </td>
+                             <td className="py-3 px-4 text-muted-foreground hidden sm:table-cell">
+                               {product.model?.brand} {product.model?.name}
+                             </td>
+                             <td className="py-3 px-4 text-muted-foreground hidden md:table-cell">
+                               {product.category?.name}
+                             </td>
+                             <td className="py-3 px-4">
+                               <div className="flex items-center space-x-1">
+                                 {(isAdmin || isEditor) && (
+                                   <Button
+                                     variant="outline"
+                                     size="sm"
+                                     onClick={() => updateQuantity(product.id, product.quantity - 1)}
+                                     disabled={product.quantity <= 0}
+                                     className="h-7 w-7 p-0"
+                                   >
+                                     <Minus className="h-3 w-3" />
+                                   </Button>
+                                 )}
+                                 <span className="w-8 text-center text-sm font-medium">{product.quantity}</span>
+                                 {(isAdmin || isEditor) && (
+                                   <Button
+                                     variant="outline"
+                                     size="sm"
+                                     onClick={() => updateQuantity(product.id, product.quantity + 1)}
+                                     className="h-7 w-7 p-0"
+                                   >
+                                     <Plus className="h-3 w-3" />
+                                   </Button>
+                                 )}
+                               </div>
+                               <div className="text-xs text-muted-foreground mt-1">
+                                 min: {product.min_quantity}
+                               </div>
+                             </td>
+                             <td className="py-3 px-4 text-muted-foreground hidden lg:table-cell">
+                               {product.expiry_date 
+                                 ? new Date(product.expiry_date).toLocaleDateString('pt-BR')
+                                 : 'N/A'
+                               }
+                             </td>
+                             <td className="py-3 px-4">
+                               {getStatusBadge(product)}
+                             </td>
+                             {(isAdmin || isEditor) && (
+                               <td className="py-3 px-4">
+                                 <Button
+                                   variant="ghost"
+                                   size="sm"
+                                   onClick={() => deleteProduct(product.id)}
+                                   className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
+                                 >
+                                   <Trash className="h-3 w-3" />
+                                 </Button>
+                               </td>
+                             )}
+                           </tr>
+                         ))}
                       </tbody>
                     </table>
                   )}
